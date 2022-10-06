@@ -3,13 +3,15 @@
 #include <memory>
 #include <vector>
 #include <MotorController.hpp>
+#include <WiFi.h>
+
 #include "Encoder.hpp"
 #include "PID.h"
+#include "web.hpp"
 
 using namespace std;
 
 const int SERIAL_BAUD = 115200;
-
 
 ////////////// Motor pins
 const int MOTOR_1_IN_1 = 33;
@@ -33,43 +35,66 @@ const auto PWM_MAX = 255;
 PID motor1Pid(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 float Kp, Ki, Kd;
 float setpoint = 5.0;
-////////////////////////////////////////
+/////////////////// Web server   /////////////////////
+
+auto ssid = "....";
+auto password = "....";
+
+//////////////////////////////////////////
 
 MotorController motor1Controller;
 unique_ptr<Encoder> motor1Encoder;
 
 volatile int64_t encoder1Count = 0;
 
-void testMotors()
+string parseCommand(const char *data, size_t len)
 {
-  int dutyCycle;
-
-  dutyCycle = 200;
-  Serial << dutyCycle << endl;
-  motor1Controller.spin(dutyCycle);
-  delay(2000);
-
-  dutyCycle = 150;
-  Serial << dutyCycle << endl;
-  motor1Controller.spin(dutyCycle);
-  delay(2000);
-
-  dutyCycle = -200;
-  Serial << dutyCycle << endl;
-  motor1Controller.spin(dutyCycle);
-  delay(2000);
-
-  dutyCycle = -150;
-  Serial << dutyCycle << endl;
-  motor1Controller.spin(dutyCycle);
-  delay(2000);
+    if (strncmp(data, "pid ", 4) == 0)
+    {
+        Serial << "PID PID PID setpoint" << endl;
+        Serial << "->" << Kp << ' ' << Ki << ' ' << Kd << ' ' << setpoint << endl;
+        int Kp_int, Ki_int, Kd_int, setpoint_int;
+        int ok = sscanf(data + strlen("pid "), "%f %f %f %f", &Kp, &Ki, &Kd, &setpoint);
+        if (ok != 4)
+        {
+            Serial.println("Invalid format");
+            return "Invalid format";
+        }
+        else
+        {
+            Serial << "->" << Kp << ' ' << Ki << ' ' << Kd << ' ' << setpoint << endl;
+            motor1Pid.updateConstants(Kp, Ki, Kd);
+        }
+        return "parseCommand OK";
+    }
+    else
+    {
+        return "parseCommand UNKNONW";
+    }
 }
 
+void ConnectToWifi()
+{
+    // Connect to Wi-Fi
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED)
+    {
+        delay(1000);
+        Serial << "Connecting to WiFi.." << endl;
+    }
+    // Print ESP Local IP Address
+    Serial << "IP: " << WiFi.localIP() << endl;
+}
 
 void setup()
 {
     Serial.begin(115200);
     Serial.println("Booting");
+
+    ConnectToWifi();
+
+    StartWebServer([](uint8_t *data, size_t len)
+                   { return parseCommand((const char *)data, len); });
 
     motor1Encoder.reset(new Encoder(ENCODER_1_OUT_1, ENCODER_1_OUT_2, ENCODER_COUNTS_PER_REVOLUTION));
     motor1Controller.init(MOTOR_1_IN_1, MOTOR_1_IN_2, MOTOR_1_PWM_CHANNEL);
@@ -106,29 +131,8 @@ void readInput()
     //// Read input
     if (readLine())
     {
-        Serial.print("Line: ");
-        Serial.println(buffer);
-        if (strncmp(buffer, "pid ", 4) == 0)
-        {
-
-            Serial << "PID PID PID setpoint" << endl;
-            Serial << "->" << Kp << ' ' << Ki << ' ' << Kd << ' ' << setpoint << endl;
-            int Kp_int, Ki_int, Kd_int, setpoint_int;
-            int ok = sscanf(buffer + strlen("pid "), "%d %d %d %d", &Kp_int, &Ki_int, &Kd_int, &setpoint_int);
-            if (ok != 4)
-            {
-                Serial.println("Invalid format");
-            }
-            else
-            {
-                Kp = Kp_int / 100.0;
-                Ki = Ki_int / 100.0;
-                Kd = Kd_int / 100.0;
-                setpoint = setpoint_int / 100.0;
-                Serial << "->" << Kp << ' ' << Ki << ' ' << Kd << ' ' << setpoint << endl;
-                motor1Pid.updateConstants(Kp, Ki, Kd);
-            }
-        }
+        auto res = parseCommand(buffer, buflen);
+        Serial << res.c_str() << endl;
     }
 }
 

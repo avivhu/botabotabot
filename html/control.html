@@ -1,0 +1,75 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+    <title>BoToBoToBoT</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+</head>
+
+<body>
+    <h1>BoToBoToBoT</h1>
+    <div>
+        <h2>Input Text</h2>
+        <textarea id="inputText"></textarea>
+        <p><button id="button" class="button">Send</button></p>
+        <br>
+        <h2>Output Text</h2>
+        <textarea id="outputText"></textarea>
+        <br>
+        <h2>IP Address</h2>
+        <textarea id="ipAddress"></textarea>
+    </div>
+
+    <script>
+        var ipAddress = "10.0.0.112";
+        var gateway = "ws://" + ipAddress +"/ws";
+        var websocket;
+        window.addEventListener('load', onLoad);
+        function initWebSocket() {
+            console.log('Trying to open a WebSocket connection to ' + gateway);
+            websocket = new WebSocket(gateway);
+            websocket.onopen = onOpen;
+            websocket.onclose = onClose;
+            websocket.onmessage = onMessage;
+        }
+
+        function onOpen(event) {
+            console.log('Connection opened');
+        }
+
+        function onClose(event) {
+            console.log('Connection closed');
+            setTimeout(initWebSocket, 2000);
+        }
+        
+        function onMessage(event) {
+            console.warn("Got message: " + event.data);
+            $("#outputText").val(event.data);
+        }
+
+        function onLoad(event) {
+
+            var inputText = $("#inputText");
+            inputText.val("pid 10 0.4 0 30");
+
+            var ipAddressCtrl = $("#ipAddress");
+            ipAddressCtrl.val(ipAddress);
+
+            initWebSocket();
+
+            // Init button
+            document.getElementById('button').addEventListener('click', sendInputText);
+        }
+
+        function sendInputText() {
+            var inputText = $("textarea");
+            if (inputText.val().length > 0) {
+                console.warn("Sending: " + inputText.val());
+                websocket.send(inputText.val());
+            }
+        }
+
+    </script>
+</body>
+
+</html>
