@@ -4,31 +4,29 @@
 #include "Arduino.h"
 #include <Streaming.h>
 
-MotorController::MotorController(bool invert) : _invert(invert)
+OneInputMotorController::OneInputMotorController(bool invert) : _invert(invert)
 {
-
 }
 
-void MotorController::init(int in1, int in2, int pwmChannel)
+void OneInputMotorController::init(int enablePin, int directionPin, int pwmChannel)
 {
-    // Set PWM properties
+    _enablePin = enablePin;
+    _directionPin = directionPin;
+    _pwmChannel = pwmChannel;
+
+    pinMode(_enablePin, OUTPUT);
+    pinMode(_directionPin, OUTPUT);
+
+    // Set up PWM
     const int freq = 20000;
     const int resolution = 8;
-    _pwmChannel = pwmChannel;
-    // Configure LED PWM functionalitites
     ledcSetup(_pwmChannel, freq, resolution);
+    ledcAttachPin(_enablePin, _pwmChannel);
 
-    _in1 = in1;
-    _in2 = in2;
-    _prevSpeed = 0;
-
-    pinMode(_in1, OUTPUT);
-    pinMode(_in2, OUTPUT);
-    digitalWrite(_in1, LOW);
-    digitalWrite(_in2, LOW);
+    move(0);
 }
 
-void MotorController::spin(int pwm)
+void OneInputMotorController::spin(int pwm)
 {
     if (_invert)
     {
@@ -36,70 +34,28 @@ void MotorController::spin(int pwm)
     }
 
     move(pwm);
-
-    // if (pwm > 0)
-    //     forward(pwm);
-    // else if (pwm < 0)
-    //     reverse(pwm);
-    // else
-    //     brake();
 }
 
-void MotorController::forward(int pwm)
+void OneInputMotorController::forward(int pwm)
 {
     assert(pwm > 0);
     move(pwm);
 }
 
-void MotorController::reverse(int pwm)
+void OneInputMotorController::reverse(int pwm)
 {
     assert(pwm < 0);
     move(pwm);
 }
 
-void MotorController::brake()
+void OneInputMotorController::move(int speed)
 {
-    move(0);
+    digitalWrite(_directionPin, speed >= 0 ? HIGH : LOW);
+    _analogWrite(abs(speed));
+    _curPwm = speed;
 }
 
-
-void MotorController::move(int speed)
-{
-    if (speed > 0)
-    {
-        if (_prevSpeed <= 0)
-        {
-            ledcDetachPin(_in2);
-            digitalWrite(_in2, LOW);
-            ledcAttachPin(_in1, _pwmChannel);
-        }
-        _analogWrite(abs(speed));
-    }
-    else if (speed < 0)
-    {
-        if (_prevSpeed >= 0)
-        {
-            ledcDetachPin(_in1);
-            digitalWrite(_in1,  LOW);
-            ledcAttachPin(_in2, _pwmChannel);
-        }
-        _analogWrite(abs(speed));
-    }
-    else
-    {
-        // If speed == 0, set both pins to LOW
-        if (_prevSpeed != 0)
-        {
-            ledcDetachPin(_in1);
-            ledcDetachPin(_in2);
-            digitalWrite(_in1, LOW);
-            digitalWrite(_in2, LOW);
-        }
-    }
-    _prevSpeed = speed;
-}
-
-void MotorController::_analogWrite(int dutyCycle)
+void OneInputMotorController::_analogWrite(int dutyCycle)
 {
     assert(dutyCycle >= 0);
     ledcWrite(_pwmChannel, dutyCycle);

@@ -1,6 +1,6 @@
 #pragma once
 
-// This code was modifed from a class by Juan Miguel Jimeno. His license follows.
+// This code was modified from a class by Juan Miguel Jimeno. His license follows.
 //        Copyright (c) 2021 Juan Miguel Jimeno
 //       
 //        Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,23 +15,30 @@
 //        See the License for the specific language governing permissions and
 //        limitations under the License.
 
-class MotorController
+
+
+
+// Quoting Juan Miguel Jimeno:
+//   GENERIC_1_IN_MOTOR_DRIVER - Motor drivers that have EN (pwm) pin, and 1 direction pin (usual DIR pin).
+//   These drivers usually have logic gates included to lessen the pins required in controlling the driver.
+//   Example: Pololu MC33926 Motor Driver Shield.
+// 
+class OneInputMotorController
 {
 public:
-    MotorController(bool invert = false);
-    void init(int in1, int in2, int pwmChannel);
+    OneInputMotorController(bool invert = false);
+    void init(int enablePin, int directionPin, int pwmChannel);
     void spin(int pwm);
 
 private:
     void forward(int pwm);
     void reverse(int pwm);
-    void brake();
     void move(int speed);
     void _analogWrite(int dutyCycle);
 
-    int _in1, _in2;
+    int _enablePin, _directionPin;
 
     int _pwmChannel;
-    int _prevSpeed;
+    int _curPwm;
     bool _invert;
 };
