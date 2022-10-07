@@ -4,6 +4,7 @@
 #include <vector>
 #include <MotorController.hpp>
 #include <WiFi.h>
+#include <ArduinoOTA.h>
 
 #include "Encoder.hpp"
 #include "PID.h"
@@ -29,7 +30,6 @@ const int MOTOR_3_ENABLE = 12;
 const int MOTOR_3_DIRECTION = 13;
 const int MOTOR_3_PWM_CHANNEL = 2;
 
-
 ///////// Motor Encoders /////////////
 // Set pins so all wheels count "up" in the ccw direction when observed from outside the robot.
 const int ENCODER_1_OUT_1 = 36;
@@ -43,7 +43,6 @@ const bool ENCODER_2_INV = true;
 const int ENCODER_3_OUT_1 = 32;
 const int ENCODER_3_OUT_2 = 33;
 const bool ENCODER_3_INV = true;
-
 
 const float ENCODER_COUNTS_PER_REVOLUTION = 360 * 74.8; // Use encoder CPR (360) times gear reduction ratio (74.8)
 
@@ -61,6 +60,7 @@ float Kp, Ki, Kd;
 float setpoint = 12.0;
 /////////////////// Web server   /////////////////////
 
+const char* HOSTNAME = "botabotabot";
 
 //////////////////////////////////////////
 
@@ -72,9 +72,57 @@ unique_ptr<Encoder> motor1Encoder;
 unique_ptr<Encoder> motor2Encoder;
 unique_ptr<Encoder> motor3Encoder;
 
+void InitOta()
+{
+    // Code from: https://github.com/espressif/arduino-esp32/blob/master/libraries/ArduinoOTA/examples/BasicOTA/BasicOTA.ino
+
+    // Port defaults to 3232
+    // ArduinoOTA.setPort(3232);
+
+    // Hostname defaults to esp3232-[MAC]
+    ArduinoOTA.setHostname(HOSTNAME);
+
+    // No authentication by default
+    // ArduinoOTA.setPassword("admin");
+
+    // Password can be set with it's md5 value as well
+    // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
+    // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
+
+    ArduinoOTA
+        .onStart([]()
+                 {
+      String type;
+      if (ArduinoOTA.getCommand() == U_FLASH)
+        type = "sketch";
+      else // U_SPIFFS
+        type = "filesystem";
+
+      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+      Serial.println("OTA Start updating " + type); })
+        .onEnd([]()
+               { Serial.println("\nOTA End"); })
+        .onProgress([](unsigned int progress, unsigned int total)
+                    { Serial.printf("OTA Progress: %u%%\r", (progress / (total / 100))); })
+        .onError([](ota_error_t error)
+                 {
+      Serial.printf("OTA Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+      else if (error == OTA_END_ERROR) Serial.println("End Failed"); });
+
+    ArduinoOTA.begin();
+
+    Serial.println("Ready");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+}
+
 string parseCommand(const char *data, size_t len)
 {
-    std::string message(data, data+len);
+    std::string message(data, data + len);
 
     if (message.compare(0, 4, "pid ") == 0)
     {
@@ -105,6 +153,8 @@ string parseCommand(const char *data, size_t len)
 void ConnectToWifi()
 {
     // Connect to Wi-Fi
+    WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
+    WiFi.setHostname(HOSTNAME); //define hostname
     WiFi.begin(Private::ssid(), Private::password());
     while (WiFi.status() != WL_CONNECTED)
     {
@@ -156,6 +206,8 @@ void setup()
 
     ConnectToWifi();
 
+    InitOta();
+
     StartWebServer([](uint8_t *data, size_t len)
                    { return parseCommand((const char *)data, len); });
 
@@ -170,17 +222,15 @@ void setup()
     Serial << "Ready" << endl;
 }
 
-
-
 struct MotorStatus
 {
-    int64_t     count;
-    float       rpm;
-    float       requestedRpm;
-    int         pwm;
+    int64_t count;
+    float rpm;
+    float requestedRpm;
+    int pwm;
 };
 
-MotorStatus controlSpeed(MotorController& motorController, Encoder& motorEncoder, PID& motorPid)
+MotorStatus controlSpeed(MotorController &motorController, Encoder &motorEncoder, PID &motorPid)
 {
     auto count = motorEncoder.encoder().getCount();
     auto rpm = motorEncoder.getRPM();
@@ -197,7 +247,7 @@ MotorStatus controlSpeed(MotorController& motorController, Encoder& motorEncoder
     return status;
 }
 
-HardwareSerial& toStream(HardwareSerial& s, float f1, float f2, float f3)
+HardwareSerial &toStream(HardwareSerial &s, float f1, float f2, float f3)
 {
     char buf[128];
     snprintf(buf, sizeof(buf), "[%.2f %.2f %.2f]", f1, f2, f3);
@@ -235,6 +285,7 @@ void loop()
         Serial << endl;
     }
 
+    ArduinoOTA.handle();
 
     delay(10);
 }
