@@ -6,7 +6,8 @@ class Encoder
 {
 public:
     Encoder(uint8_t pin1, uint8_t pin2, float counts_per_rev, bool invert = false)
-        : _encoder(), counts_per_rev_(counts_per_rev)
+        : _encoder(),
+          counts_per_rev_(counts_per_rev)
     {
         if (invert)
         {
@@ -20,6 +21,8 @@ public:
         // Enable the weak pull up resistors
         ESP32Encoder::useInternalWeakPullResistors = UP;
         _encoder.attachSingleEdge(pin1, pin2);
+
+        getRPM(); // Init the "prev upadate time, prev ticks" and throw away the value.
     }
 
     ESP32Encoder &encoder()
@@ -33,14 +36,14 @@ public:
         int64_t encoder_ticks = _encoder.getCount();
 
         unsigned long current_time = micros();
-        unsigned long dt = current_time - prev_update_time_;
+        unsigned long dt = current_time - _prev_update_time;
 
         // Convert the time from milliseconds to minutes
         double dtm = ((double)dt) / 60000000;
         int64_t delta_ticks = encoder_ticks - prev_encoder_ticks_;
 
         // Calculate wheel's speed (RPM)
-        prev_update_time_ = current_time;
+        _prev_update_time = current_time;
         prev_encoder_ticks_ = encoder_ticks;
 
         return (float)((delta_ticks / counts_per_rev_) / dtm);
@@ -48,7 +51,7 @@ public:
 
 private:
     ESP32Encoder _encoder;
-    unsigned long prev_update_time_;
+    unsigned long _prev_update_time;
     int64_t prev_encoder_ticks_;
     float counts_per_rev_;
 };

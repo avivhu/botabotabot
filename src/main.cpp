@@ -6,10 +6,11 @@
 #include <WiFi.h>
 #include <ArduinoOTA.h>
 
+#include "private.hpp"
+#include "web.hpp"
 #include "Encoder.hpp"
 #include "PID.h"
-#include "web.hpp"
-#include "private.hpp"
+#include "kinematics.hpp"
 
 using namespace std;
 
@@ -57,8 +58,18 @@ PID motor1Pid(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 PID motor2Pid(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 PID motor3Pid(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 float Kp, Ki, Kd;
-float setpoint = 12.0;
-/////////////////// Web server   /////////////////////
+///////////////////  Kinematics  /////////////////////
+
+const auto PLATFORM_WHEEL_OFFSET_METERS = 0.104f;
+const auto WHEEL_RADIUS_METERS = 58.0f / 1000 / 2; // Wheel diameter is 58 mm
+Kinematics kinematics(PLATFORM_WHEEL_OFFSET_METERS, WHEEL_RADIUS_METERS);
+
+float linearX = 0;  // Meters  / sec
+float linearY = 0;  // Meters  / sec
+float angularZ = 0; // Degrees / sec
+
+
+///////////////////  Web server  /////////////////////
 
 const char* HOSTNAME = "botabotabot";
 
@@ -126,28 +137,44 @@ string parseCommand(const char *data, size_t len)
 
     if (message.compare(0, 4, "pid ") == 0)
     {
-        Serial << "PID PID PID setpoint" << endl;
-        Serial << "->" << Kp << ' ' << Ki << ' ' << Kd << ' ' << setpoint << endl;
-        int Kp_int, Ki_int, Kd_int, setpoint_int;
-        int ok = sscanf(message.c_str() + strlen("pid "), "%f %f %f %f", &Kp, &Ki, &Kd, &setpoint);
-        if (ok != 4)
+        Serial << "PID PID PID" << endl;
+        Serial << "->" << Kp << ' ' << Ki << ' ' << Kd << endl;
+        int ok = sscanf(message.c_str() + strlen("pid "), "%f %f %f", &Kp, &Ki, &Kd);
+        if (ok != 3)
         {
             Serial.println("Invalid format");
             return "Invalid format";
         }
         else
         {
-            Serial << "->" << Kp << ' ' << Ki << ' ' << Kd << ' ' << setpoint << endl;
+            Serial << "->" << Kp << ' ' << Ki << ' ' << Kd << endl;
             motor1Pid.updateConstants(Kp, Ki, Kd);
             motor2Pid.updateConstants(Kp, Ki, Kd);
             motor3Pid.updateConstants(Kp, Ki, Kd);
         }
-        return "parseCommand OK";
+    }
+    else if (message.compare(0, 4, "vel ") == 0)
+    {
+        Serial << "LinearX LinearY VelocityZ" << endl;
+        int ok = sscanf(message.c_str() + strlen("vel "), "%f %f %f", &linearX, &linearY, &angularZ);
+        if (ok != 3)
+        {
+            Serial.println("Invalid format");
+            return "Invalid format";
+        }
+        else
+        {
+            Serial << "Velocities->" << linearX << ' ' << linearY << ' ' << angularZ << endl;
+            motor1Pid.updateConstants(Kp, Ki, Kd);
+            motor2Pid.updateConstants(Kp, Ki, Kd);
+            motor3Pid.updateConstants(Kp, Ki, Kd);
+        }
     }
     else
     {
         return "parseCommand UNKNONW: " + message;
     }
+    return "parseCommand OK";
 }
 
 void ConnectToWifi()
@@ -230,11 +257,10 @@ struct MotorStatus
     int pwm;
 };
 
-MotorStatus controlSpeed(MotorController &motorController, Encoder &motorEncoder, PID &motorPid)
+MotorStatus controlSpeed(MotorController &motorController, Encoder &motorEncoder, PID &motorPid, const float requestedRpm)
 {
     auto count = motorEncoder.encoder().getCount();
     auto rpm = motorEncoder.getRPM();
-    auto requestedRpm = setpoint;
     auto pwm = (int)motorPid.compute(requestedRpm, rpm);
     motorController.spin(pwm);
 
@@ -255,14 +281,21 @@ HardwareSerial &toStream(HardwareSerial &s, float f1, float f2, float f3)
     return s;
 }
 
+
 unsigned long prevPrintTime = 0;
 void loop()
 {
+    ArduinoOTA.handle();
+
     readInput();
 
-    auto st1 = controlSpeed(motor1Controller, *motor1Encoder, motor1Pid);
-    auto st2 = controlSpeed(motor2Controller, *motor2Encoder, motor2Pid);
-    auto st3 = controlSpeed(motor3Controller, *motor3Encoder, motor3Pid);
+    // Compute desired wheel RPMs from desired body velocity
+    Kinematics::rpm requestedRpm = kinematics.getRPM(linearX, linearY, angularZ);
+
+    // Adjust wheel effort for each wheel to achieve requested RPM
+    auto st1 = controlSpeed(motor1Controller, *motor1Encoder, motor1Pid, requestedRpm.motor1);
+    auto st2 = controlSpeed(motor2Controller, *motor2Encoder, motor2Pid, requestedRpm.motor2);
+    auto st3 = controlSpeed(motor3Controller, *motor3Encoder, motor3Pid, requestedRpm.motor3);
 
     auto now = millis();
     bool printStatus = false;
@@ -272,10 +305,12 @@ void loop()
         printStatus = true;
     }
 
-    if (printStatus)
+    if (true && printStatus)
     {
         Serial << " RPM =";
         toStream(Serial, st1.rpm, st2.rpm, st3.rpm);
+        Serial << " Requested RPM =";
+        toStream(Serial, requestedRpm.motor1, requestedRpm.motor2, requestedRpm.motor3);
         Serial << " PWM = ";
         toStream(Serial, st1.pwm, st2.pwm, st3.pwm);
         Serial << " Count = ";
@@ -284,8 +319,6 @@ void loop()
         toStream(Serial, (st1.count / ENCODER_COUNTS_PER_REVOLUTION), (st2.count / ENCODER_COUNTS_PER_REVOLUTION), (st3.count / ENCODER_COUNTS_PER_REVOLUTION));
         Serial << endl;
     }
-
-    ArduinoOTA.handle();
 
     delay(10);
 }
