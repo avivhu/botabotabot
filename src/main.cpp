@@ -19,12 +19,12 @@ using MotorController = OneInputMotorController;
 const int SERIAL_BAUD = 115200;
 
 ////////////// Motor pins
-const int MOTOR_1_ENABLE = 25;
-const int MOTOR_1_DIRECTION = 26;
+const int MOTOR_1_ENABLE = 32;
+const int MOTOR_1_DIRECTION = 33;
 const int MOTOR_1_PWM_CHANNEL = 0;
 
-const int MOTOR_2_ENABLE = 27;
-const int MOTOR_2_DIRECTION = 14;
+const int MOTOR_2_ENABLE = 25;
+const int MOTOR_2_DIRECTION = 26;
 const int MOTOR_2_PWM_CHANNEL = 1;
 
 const int MOTOR_3_ENABLE = 12;
@@ -33,16 +33,16 @@ const int MOTOR_3_PWM_CHANNEL = 2;
 
 ///////// Motor Encoders /////////////
 // Set pins so all wheels count "up" in the ccw direction when observed from outside the robot.
-const int ENCODER_1_OUT_1 = 36;
-const int ENCODER_1_OUT_2 = 39;
+const int ENCODER_1_OUT_1 = 36; // AKA VP Pin
+const int ENCODER_1_OUT_2 = 39; // AKA VN Pin
 const bool ENCODER_1_INV = true;
 
-const int ENCODER_2_OUT_1 = 34;
-const int ENCODER_2_OUT_2 = 35;
+const int ENCODER_2_OUT_1 = 35;
+const int ENCODER_2_OUT_2 = 34;
 const bool ENCODER_2_INV = true;
 
-const int ENCODER_3_OUT_1 = 32;
-const int ENCODER_3_OUT_2 = 33;
+const int ENCODER_3_OUT_1 = 14;
+const int ENCODER_3_OUT_2 = 27;
 const bool ENCODER_3_INV = true;
 
 const float ENCODER_COUNTS_PER_REVOLUTION = 360 * 74.8; // Use encoder CPR (360) times gear reduction ratio (74.8)
@@ -287,6 +287,35 @@ void loop()
 {
     ArduinoOTA.handle();
 
+    // Serial << "1" << endl;
+    // motor1Controller.spin(255);
+    // delay(1000);
+    // motor1Controller.spin(-255);
+    // delay(3000);
+    // motor1Controller.spin(0);
+    // Serial << "2" << endl;
+    // motor2Controller.spin(255);
+    // delay(1000);
+    // motor2Controller.spin(-255);
+    // delay(3000);
+    // motor2Controller.spin(0);
+    // Serial << "3" << endl;
+    // motor3Controller.spin(255);
+    // delay(1000);
+    // motor3Controller.spin(-255);
+    // delay(3000);
+    // motor3Controller.spin(0);
+    // delay(1000);
+    // Serial << "123" << endl;
+    // motor1Controller.spin(255);
+    // motor2Controller.spin(255);
+    // motor3Controller.spin(255);
+    // delay(3000);
+    // motor1Controller.spin(0);
+    // motor2Controller.spin(0);
+    // motor3Controller.spin(0);
+
+
     readInput();
 
     // Compute desired wheel RPMs from desired body velocity
@@ -305,7 +334,7 @@ void loop()
         printStatus = true;
     }
 
-    if (true && printStatus)
+    if (printStatus)
     {
         Serial << " RPM =";
         toStream(Serial, st1.rpm, st2.rpm, st3.rpm);
