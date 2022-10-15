@@ -3,6 +3,7 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <Streaming.h>
+#include <SPIFFS.h>
 
 const char index_html[] PROGMEM = R"rawliteral(
     This is a HTML placeholder.
@@ -64,6 +65,8 @@ void StartWebServer(MessageCallbackType onMessageCb)
         // Route for root / web page
         server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
                   { request->send_P(200, "text/html", index_html); });
+
+        server.serveStatic("/data", SPIFFS, "/data");
     }
     // Start server
     server.begin();

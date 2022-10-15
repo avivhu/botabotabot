@@ -27,9 +27,7 @@ public:
 
     struct rpm
     {
-        float motor1;
-        float motor2;
-        float motor3;
+        float motorRpm[3];
     };
 
     struct velocities
@@ -41,9 +39,7 @@ public:
 
     struct pwm
     {
-        int motor1;
-        int motor2;
-        int motor3;
+        int motorPwm[3];
     };
 
     rpm getRPM(float linear_x, float linear_y, float angular_z);
@@ -71,5 +67,5 @@ Kinematics::rpm Kinematics::getRPM(float linearX, float linearY, float angularZ)
     u2 *= 60.0 / (2 * M_PI);
     u3 *= 60.0 / (2 * M_PI);
 
-    return {u1, u2, u3};
+    return {{u1, u2, u3}};
 };

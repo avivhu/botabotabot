@@ -29,10 +29,9 @@ public:
     OneInputMotorController(bool invert = false);
     void init(int enablePin, int directionPin, int pwmChannel);
     void spin(int pwm);
+    int getPwm() const { return _curPwm; }
 
 private:
-    void forward(int pwm);
-    void reverse(int pwm);
     void move(int speed);
     void _analogWrite(int dutyCycle);
 

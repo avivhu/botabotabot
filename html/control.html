@@ -15,6 +15,7 @@
         <br>
 
         <button id="motionButton">Motion</button>
+        <button id="calibrationButton">Calibration</button>
 
         <br>
         <h2>Output Text</h2>
@@ -22,6 +23,11 @@
         <br>
         <h2>IP Address</h2>
         <textarea id="ipAddress"></textarea>
+
+        <br>
+        <a href="http://botabotabot/data/motorcalib.txt">Motor calibration</a>
+        <br>
+        <a href="http://botabotabot/data/calibdata.tsv">Raw calibration data</a>
     </div>
 
     <script>
@@ -64,6 +70,7 @@
             // Init button
             document.getElementById('button').addEventListener('click', sendInputText);
             document.getElementById('motionButton').addEventListener('click', motionScript);
+            document.getElementById('calibrationButton').addEventListener('click', calibrationScript);
         }
 
         function sleep(milliseconds) {
@@ -89,6 +96,11 @@
             sleep(3000);
             websocket.send("vel 0 0 0 ");
         }
+
+        function calibrationScript() {
+            websocket.send("calib");
+        }
+
 
         function sendInputText() {
             var inputText = $("textarea");

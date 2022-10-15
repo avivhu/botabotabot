@@ -36,18 +36,6 @@ void OneInputMotorController::spin(int pwm)
     move(pwm);
 }
 
-void OneInputMotorController::forward(int pwm)
-{
-    assert(pwm > 0);
-    move(pwm);
-}
-
-void OneInputMotorController::reverse(int pwm)
-{
-    assert(pwm < 0);
-    move(pwm);
-}
-
 void OneInputMotorController::move(int speed)
 {
     digitalWrite(_directionPin, speed >= 0 ? HIGH : LOW);
