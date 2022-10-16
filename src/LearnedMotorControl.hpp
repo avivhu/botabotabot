@@ -78,7 +78,6 @@ public:
             ));
             RpmPwm item = {rpm, pwm};
             _rpmToPwmMap.emplace_back(item);
-            Serial << "rpm pwm: " << rpm << " " << pwm << endl;
         }
         Serial << "Read " << _rpmToPwmMap.size() << " calibration values." << endl;
         file.close();

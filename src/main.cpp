@@ -13,10 +13,11 @@
 #include "Encoder.hpp"
 #include "PID.h"
 #include "kinematics.hpp"
+#include "XboxDriveController.hpp"
 
 using namespace std;
 
-#define LEARNED_MOTOR_CONTROL
+#define LEARNED_MOTOR_CONTROL // Set to use precomputed motor PWM instead of the PID controller
 
 typedef std::function<int(float)> RpmToPwmComputeFunction;
 
@@ -31,8 +32,9 @@ typedef PID AbstractPid;
 #endif
 
 const int SERIAL_BAUD = 115200;
+const int N_MOTORS = 3;
 
-////////////// Motor pins
+////////////// Motor Pins //////////////
 const int MOTOR_0_ENABLE = 32;
 const int MOTOR_0_DIRECTION = 33;
 const int MOTOR_0_PWM_CHANNEL = 0;
@@ -45,7 +47,8 @@ const int MOTOR_2_ENABLE = 12;
 const int MOTOR_2_DIRECTION = 13;
 const int MOTOR_2_PWM_CHANNEL = 2;
 
-///////// Motor Encoders /////////////
+///////// Motor Encoder Pins /////////////
+
 // Set pins so all wheels count "up" in the ccw direction when observed from outside the robot.
 const int ENCODER_0_OUT_1 = 36; // AKA VP Pin
 const int ENCODER_0_OUT_2 = 39; // AKA VN Pin
@@ -59,11 +62,9 @@ const int ENCODER_2_OUT_1 = 14;
 const int ENCODER_2_OUT_2 = 27;
 const bool ENCODER_2_INV = true;
 
-const int N_MOTORS = 3;
-
 const float ENCODER_COUNTS_PER_REVOLUTION = 360 * 74.8; // Use encoder CPR (360) times gear reduction ratio (74.8)
 
-////////////// PID ////////////////////////
+////////////// PID Control ////////////////////////
 
 const auto K_P = 3.0;
 const auto K_I = 0.4;
@@ -76,6 +77,7 @@ array<PID, N_MOTORS> motorPids = {
     PID(PWM_MIN, PWM_MAX, K_P, K_I, K_D),
 };
 float Kp, Ki, Kd;
+
 ///////////////////  Kinematics  /////////////////////
 
 const auto PLATFORM_WHEEL_OFFSET_METERS = 0.104f;
@@ -86,19 +88,22 @@ float linearX = 0;  // Meters  / sec
 float linearY = 0;  // Meters  / sec
 float angularZ = 0; // Degrees / sec
 
-////////////////////////////////////////////// State
-enum State
+///////////////////////////////////////
+
+XboxDriveController xboxDriveController;
+
+//////////////// Robot State //////////
+enum RobotState
 {
     STOP = 0,
     DRIVE = 1,
     CALIB = 2,
 };
 
-State state = State::DRIVE;
-
+RobotState state = RobotState::DRIVE;
 void StopAllMotors();
 
-void SetState(State newState)
+void SetState(RobotState newState)
 {
     if (state != newState)
     {
@@ -116,6 +121,7 @@ const char *HOSTNAME = "botabotabot";
 array<MotorController, N_MOTORS> motorControllers;
 array<unique_ptr<Encoder>, N_MOTORS> motorEncoders;
 
+// Over-the-air code upload for ESP32
 void InitOta()
 {
     // Code from: https://github.com/espressif/arduino-esp32/blob/master/libraries/ArduinoOTA/examples/BasicOTA/BasicOTA.ino
@@ -164,7 +170,8 @@ void InitOta()
     Serial.println(WiFi.localIP());
 }
 
-string parseCommand(const char *data, size_t len)
+// Handle text command, which may come from Serial Port, Web Socket, etc.
+string HandleTextCommand(const char *data, size_t len)
 {
     std::string message(data, data + len);
 
@@ -198,19 +205,19 @@ string parseCommand(const char *data, size_t len)
         }
         else
         {
-            SetState(State::DRIVE);
+            SetState(RobotState::DRIVE);
             Serial << "Velocities->" << linearX << ' ' << linearY << ' ' << angularZ << endl;
         }
     }
     else if (message.compare(0, 5, "calib") == 0)
     {
-        SetState(State::CALIB);
+        SetState(RobotState::CALIB);
     }
     else
     {
-        return "parseCommand UNKNONW: " + message;
+        return "HandleTextCommand UNKNONW: " + message;
     }
-    return "parseCommand OK";
+    return "HandleTextCommand OK";
 }
 
 void ConnectToWifi()
@@ -231,7 +238,7 @@ void ConnectToWifi()
 char buffer[128];
 int buflen = 0;
 
-bool readLine()
+bool ReadSerialLine()
 {
     while (Serial.available())
     {
@@ -252,12 +259,12 @@ bool readLine()
     return false;
 }
 
-void readInput()
+void ReadSerialInput()
 {
     //// Read input
-    if (readLine())
+    if (ReadSerialLine())
     {
-        auto res = parseCommand(buffer, buflen);
+        auto res = HandleTextCommand(buffer, buflen);
         Serial << res.c_str() << endl;
     }
 }
@@ -275,7 +282,8 @@ void setup()
 
 #ifdef LEARNED_MOTOR_CONTROL
     learnedMotorControl.LoadFromFile();
-    learnedMotorControl.PrintMappingSamples();
+    // learnedMotorControl.PrintMappingSamples();
+
 #endif
 
     ConnectToWifi();
@@ -283,7 +291,9 @@ void setup()
     InitOta();
 
     StartWebServer([](uint8_t *data, size_t len)
-                   { return parseCommand((const char *)data, len); });
+                   { return HandleTextCommand((const char *)data, len); });
+
+    xboxDriveController.Setup();
 
     learnedMotorControl.LoadFromFile();
 
@@ -295,7 +305,7 @@ void setup()
     motorControllers[1].init(MOTOR_1_ENABLE, MOTOR_1_DIRECTION, MOTOR_1_PWM_CHANNEL);
     motorControllers[2].init(MOTOR_2_ENABLE, MOTOR_2_DIRECTION, MOTOR_2_PWM_CHANNEL);
 
-    SetState(State::STOP);
+    SetState(RobotState::STOP);
     Serial << "Ready" << endl;
 }
 
@@ -307,7 +317,7 @@ struct MotorStatus
     int pwm;
 };
 
-MotorStatus controlSpeed(MotorController &motorController, Encoder &motorEncoder, AbstractPid &motorPid, const float requestedRpm)
+MotorStatus ControlSpeed(MotorController &motorController, Encoder &motorEncoder, AbstractPid &motorPid, const float requestedRpm)
 {
     auto count = motorEncoder.encoder().getCount();
     auto rpm = motorEncoder.getRPM();
@@ -323,7 +333,7 @@ MotorStatus controlSpeed(MotorController &motorController, Encoder &motorEncoder
     return status;
 }
 
-HardwareSerial &toStream(HardwareSerial &s, float f1, float f2, float f3)
+HardwareSerial &ToStream(HardwareSerial &s, float f1, float f2, float f3)
 {
     char buf[128];
     snprintf(buf, sizeof(buf), "[%.2f %.2f %.2f]", f1, f2, f3);
@@ -352,9 +362,9 @@ static void DriveLoop()
     for (size_t i = 0; i < N_MOTORS; ++i)
     {
 #ifdef LEARNED_MOTOR_CONTROL
-        st[i] = controlSpeed(motorControllers[i], *motorEncoders[i], learnedMotorControl, requestedRpm.motorRpm[i]);
+        st[i] = ControlSpeed(motorControllers[i], *motorEncoders[i], learnedMotorControl, requestedRpm.motorRpm[i]);
 #else
-        st[i] = controlSpeed(motorControllers[i], *motorEncoders[i], motorPids[i], requestedRpm.motorRpm[i]);
+        st[i] = ControlSpeed(motorControllers[i], *motorEncoders[i], motorPids[i], requestedRpm.motorRpm[i]);
 #endif
     }
 
@@ -369,15 +379,15 @@ static void DriveLoop()
     if (printStatus)
     {
         Serial << " RPM =";
-        toStream(Serial, st[0].rpm, st[1].rpm, st[2].rpm);
+        ToStream(Serial, st[0].rpm, st[1].rpm, st[2].rpm);
         Serial << " Requested RPM =";
-        toStream(Serial, requestedRpm.motorRpm[0], requestedRpm.motorRpm[1], requestedRpm.motorRpm[2]);
+        ToStream(Serial, requestedRpm.motorRpm[0], requestedRpm.motorRpm[1], requestedRpm.motorRpm[2]);
         Serial << " PWM = ";
-        toStream(Serial, st[0].pwm, st[1].pwm, st[2].pwm);
+        ToStream(Serial, st[0].pwm, st[1].pwm, st[2].pwm);
         Serial << " Count = ";
-        toStream(Serial, st[0].count, st[1].count, st[2].count);
+        ToStream(Serial, st[0].count, st[1].count, st[2].count);
         Serial << " Revs = ";
-        toStream(Serial, (st[0].count / ENCODER_COUNTS_PER_REVOLUTION), (st[1].count / ENCODER_COUNTS_PER_REVOLUTION), (st[2].count / ENCODER_COUNTS_PER_REVOLUTION));
+        ToStream(Serial, (st[0].count / ENCODER_COUNTS_PER_REVOLUTION), (st[1].count / ENCODER_COUNTS_PER_REVOLUTION), (st[2].count / ENCODER_COUNTS_PER_REVOLUTION));
         Serial << endl;
     }
     delay(10);
@@ -527,23 +537,65 @@ void MotorControlCalibration()
     StopAllMotors();
 }
 
+// Read input from Xbox Controller if connected
+void ReadXboxControllerInput()
+{
+    float dx, dy, dRot;
+    XboxDriveController::DriveState driveState;
+    bool restart;
+    if (xboxDriveController.TryReadXboxController(dx, dy, dRot, driveState, restart))
+    {
+        if (restart)
+        {
+            Serial << "Restarting Robot" << endl;
+            ESP.restart();
+            return;
+        }
+
+        if (driveState == XboxDriveController::DriveState::TURN_OFF)
+        {
+            Serial << "Turnining drive off" << endl;
+            SetState(RobotState::STOP);
+            return;
+        }
+        else if (driveState == XboxDriveController::DriveState::TURN_ON)
+        {
+            Serial << "Turnining drive on" << endl;
+            SetState(RobotState::DRIVE);
+            return;
+        }
+        else
+        {
+            assert(driveState == XboxDriveController::DriveState::NO_CHANGE);
+        }
+
+        // Convert proportional velocities to absolute units (M/sec, Deg/sec)
+        auto MAX_VELOCITY_M_PER_SEC = 0.3f;
+        auto MAX_ANG_VELOCITY_DEG_PER_SEC = 90.0f;
+        linearX = dx * MAX_VELOCITY_M_PER_SEC;
+        linearY = dy * MAX_VELOCITY_M_PER_SEC;
+        angularZ = dRot * MAX_ANG_VELOCITY_DEG_PER_SEC;
+    }
+}
+
 void loop()
 {
     ArduinoOTA.handle();
-    readInput();
+    ReadSerialInput();
+    ReadXboxControllerInput();
 
-    if (state == State::DRIVE)
+    if (state == RobotState::DRIVE)
     {
         DriveLoop();
     }
-    else if (state == State::CALIB)
+    else if (state == RobotState::CALIB)
     {
         MotorControlCalibration();
-        SetState(State::STOP);
+        SetState(RobotState::STOP);
     }
     else
     {
-        assert(state == State::STOP);
+        assert(state == RobotState::STOP);
         StopAllMotors();
         delay(10);
     }
