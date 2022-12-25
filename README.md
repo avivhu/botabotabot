@@ -12,7 +12,7 @@ This project takes source code and inspiration from the following sources.
 ### Linorobot
 https://github.com/linorobot/linorobot2
 
-A library for robots with various kinematics by 
+A library for robots with various kinematics by [Juan Miguel Jimeno](https://github.com/grassjelly).
 
 ### ESP32Encoder
 https://github.com/madhephaestus/ESP32Encoder
@@ -23,7 +23,7 @@ https://github.com/madhephaestus/ESP32Encoder
 * https://en.wikipedia.org/wiki/Kiwi_drive
 * https://github.com/manav20/3-wheel-omni
 * https://github.com/YugAjmera/omni3ros_pkg
-
+* [YouTube: Kinematics of Mobile Robots with Omni Directional Wheels](https://youtu.be/-wzl8XJopgg). Lecture by Dr. Mehran Andalibi.
 
 ## Images
 
