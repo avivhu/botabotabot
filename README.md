@@ -35,9 +35,9 @@ https://github.com/madhephaestus/ESP32Encoder
 
 ### Prototype board
 After testing on a breadboard, I soldered the components to a prototype board.
-I tried to make it small, because I worried the platorm won't fit all the components.
-It was laborious to fit all the components in to this tiny area.
-In retrospect the platform has enough room, so I could have used more area.
+I tried to make it small, because I worried the platform won't fit all the components.
+Soldering on this tiny board was quite laborious.
+In retrospect the platform does have enough room, so I could have used a bigger board.
 
 <img src="docs/board_top.jpg" style="width:300px;"/>
 <img src="docs/solder_back.jpg" style="width:300px;"/>
