@@ -1,13 +1,17 @@
 #pragma once
 #include <Arduino.h>
 #include <ESP32Encoder.h>
+#include <deque>
+
+const auto SLIDING_WINDOW_DURATION_USEC = 200.0 * 1000; // 2vel 0 0 000 MS
 
 class Encoder
 {
 public:
     Encoder(uint8_t pin1, uint8_t pin2, float counts_per_rev, bool invert = false)
         : _encoder(),
-          counts_per_rev_(counts_per_rev)
+          _counts_per_rev(counts_per_rev),
+          _last_report(0)
     {
         if (invert)
         {
@@ -34,24 +38,48 @@ public:
     {
         // Compute the motor's RPM based on encoder ticks and delta time.
         int64_t encoder_ticks = _encoder.getCount();
-
         unsigned long current_time = micros();
-        unsigned long dt = current_time - _prev_update_time;
+
+        // Add to sliding window
+        _tick_measurements.push_back({current_time, encoder_ticks});
+        while (current_time - std::get<0>(_tick_measurements.front()) > SLIDING_WINDOW_DURATION_USEC)
+        {
+            _tick_measurements.pop_front();
+        }
+
+        const auto prev_update_time = std::get<0>(_tick_measurements.front());
+        const auto prev_encoder_ticks = std::get<1>(_tick_measurements.front());
+
+        const unsigned long dt = current_time - prev_update_time;
+        if (dt == 0)
+        {
+            // Happens at the first time we run this
+            return 0;
+        }
+        
+        const int64_t delta_ticks = encoder_ticks - prev_encoder_ticks;
 
         // Convert the time from milliseconds to minutes
-        double dtm = ((double)dt) / 60000000;
-        int64_t delta_ticks = encoder_ticks - prev_encoder_ticks_;
+        const double dtm = ((double)dt) / 60000000;
 
         // Calculate wheel's speed (RPM)
-        _prev_update_time = current_time;
-        prev_encoder_ticks_ = encoder_ticks;
+        const auto rpm = (float)((delta_ticks / _counts_per_rev) / dtm);
 
-        return (float)((delta_ticks / counts_per_rev_) / dtm);
+        {
+            auto sec_elapsed = (current_time - _last_report) / 1e6;
+            if (sec_elapsed > 5)
+            {
+                Serial << "this=" << ((size_t)(this)) % 1000 << " dt(micros)=" << dt << " delta_ticks=" << delta_ticks << " RPM=" << rpm << endl;
+                _last_report = current_time;
+            }
+        }
+        return rpm;
     }
 
 private:
+
+    unsigned long _last_report; // For debugging
     ESP32Encoder _encoder;
-    unsigned long _prev_update_time;
-    int64_t prev_encoder_ticks_;
-    float counts_per_rev_;
+    float _counts_per_rev;
+    std::deque<std::tuple<unsigned long, int64_t>> _tick_measurements; // Sliding window samples of micros(), tick count
 };

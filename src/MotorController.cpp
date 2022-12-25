@@ -28,17 +28,15 @@ void OneInputMotorController::init(int enablePin, int directionPin, int pwmChann
 
 void OneInputMotorController::spin(int pwm)
 {
-    if (_invert)
-    {
-        pwm *= -1;
-    }
-
     move(pwm);
 }
 
 void OneInputMotorController::move(int speed)
 {
-    digitalWrite(_directionPin, speed >= 0 ? HIGH : LOW);
+    const auto directionVal = _invert ?
+        (speed >= 0 ? HIGH : LOW) :
+        (speed >= 0 ? LOW : HIGH);
+    digitalWrite(_directionPin, directionVal);
     _analogWrite(abs(speed));
     _curPwm = speed;
 }

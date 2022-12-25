@@ -12,8 +12,8 @@ const char index_html[] PROGMEM = R"rawliteral(
 static MessageCallbackType static_onMessageCb;
 
 // See tutorial: https://randomnerdtutorials.com/esp32-websocket-server-arduino/
-AsyncWebServer server(80);
-AsyncWebSocket ws("/ws");
+static AsyncWebServer s_server(80);
+static AsyncWebSocket webSocket("/ws");
 
 inline void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
 {
@@ -23,7 +23,7 @@ inline void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
         if (static_onMessageCb)
         {
             auto res = static_onMessageCb(data, len);
-            ws.textAll(res.c_str());
+            webSocket.textAll(res.c_str());
         }
     }
 }
@@ -56,18 +56,23 @@ void StartWebServer(MessageCallbackType onMessageCb)
 
     // Init Websockets
     {
-        ws.onEvent(webSocketEvent);
-        server.addHandler(&ws);
+        webSocket.onEvent(webSocketEvent);
+        s_server.addHandler(&webSocket);
     }
 
     // Start web server (not in use)
     {
         // Route for root / web page
-        server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+        s_server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
                   { request->send_P(200, "text/html", index_html); });
 
-        server.serveStatic("/data", SPIFFS, "/data");
+        s_server.serveStatic("/data", SPIFFS, "/data");
     }
     // Start server
-    server.begin();
+    s_server.begin();
+}
+
+void SendTextWeb(const char* text)
+{
+    webSocket.textAll(text);
 }

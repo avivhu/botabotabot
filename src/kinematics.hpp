@@ -48,9 +48,12 @@ public:
     float _wheelRadiusMeters;
 };
 
-// Receive platform velocity and compute the required RPM for each motor to achieve this velocity
+// Receive desired platform velocity and compute the required RPM for each motor to achieve this velocity
 // linear_x, linear_y - In meters/sec
 // angular_z - In degrees/sec
+// => The platform's positive rotation is Counter Clock-Wise as seen from the top looking down.
+// => The wheels' positive rotation is Clock-Wise as seen from inside the platform looking out.
+
 Kinematics::rpm Kinematics::getRPM(float linearX, float linearY, float angularZ)
 {
     const auto sin_60 = 0.8660254037844386f;

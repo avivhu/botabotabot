@@ -44,6 +44,15 @@ public:
     void Recompute()
     {
         sort(_rpmToPwmMap.begin(), _rpmToPwmMap.end());
+        
+        // Expect monotonicity: RPM rises with PWM 
+        for (auto i = 1; i < _rpmToPwmMap.size(); ++i)
+        {
+            if (_rpmToPwmMap[i] < _rpmToPwmMap[i-1])
+            {
+                throw std::runtime_error("Error: RPM should rise with PWM");
+            }
+        }
     }
 
     void SaveToFile() const
@@ -54,6 +63,7 @@ public:
             file.printf("%f\t%d\n", pair.rpm, pair.pwm);
         }
         file.close();
+        Serial << "Saved calibration to file: " << _fileName.c_str() << endl;
     }
 
     void LoadFromFile()
@@ -72,19 +82,27 @@ public:
             auto rpm = file.parseFloat();
             auto pwm = (int)file.parseInt();
             file.readStringUntil('\n');// Consume newline
-            assert(_rpmToPwmMap.empty() || (
+
+            auto isMonotonous = (_rpmToPwmMap.empty() || (
                 _rpmToPwmMap.back().rpm < rpm &&
                 _rpmToPwmMap.back().pwm < pwm
             ));
+
+            if (!isMonotonous)
+            {
+                throw std::runtime_error("Bad calibration file: not monotonous");
+            }
+
             RpmPwm item = {rpm, pwm};
             _rpmToPwmMap.emplace_back(item);
         }
-        Serial << "Read " << _rpmToPwmMap.size() << " calibration values." << endl;
+        Serial << "Read calibration from file: " << _fileName.c_str() << ": " <<  _rpmToPwmMap.size() << " calibration values." << endl;
         file.close();
     }
 
     void PrintMappingSamples()
     {
+        Serial << "Motor control samples" << endl;
         for (auto rpm = -200.0f; rpm < 200.0f; rpm += 5)
         {
             Serial << "rpm pwm: " << rpm << " " << LookupPwmByRpm(rpm) << endl;

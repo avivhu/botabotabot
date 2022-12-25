@@ -36,10 +36,6 @@ public:
         _xboxController.onLoop();
         if (_xboxController.isConnected())
         {
-            // Serial.println("Xbox controller address: " + _xboxController.buildDeviceAddressStr());
-            // Serial.print(_xboxController.xboxNotif.toString());
-            // unsigned long receivedAt = _xboxController.getReceiveNotificationAt();
-
             restart = (_xboxController.xboxNotif.btnLB && _xboxController.xboxNotif.btnRB);
 
             // Dir up to turn on drive, Dir down to turn off drive
@@ -67,15 +63,30 @@ public:
             dx = ConvertJoystickToNeg1to1(_xboxController.xboxNotif.joyLHori, _joysticksTrim.joyLHori);
             dy = ConvertJoystickToNeg1to1(_xboxController.xboxNotif.joyLVert, _joysticksTrim.joyLVert);
             dRot = ConvertJoystickToNeg1to1(_xboxController.xboxNotif.joyRHori, _joysticksTrim.joyRHori);
-            // Serial << "Xbox controller " << dx << " " << dy << " " << dRot << endl;
-            // Serial.print("joyLHori rate: ");
-            // Serial.println(dx);
-            // Serial.print("joyLVert rate: ");
-            // Serial.println(dy);
-            // Serial.print("joyRHori rate: ");
-            // Serial.println(da);
-            // Serial.println("battery " + String(_xboxController.battery) + "%");
-            // Serial.println("received at " + String(receivedAt));
+
+            // Convert joysticks to directions:
+            //    Left stick is translation motion (dx,dy), right stick is rotation (dRot)
+            //    1. In XBOX the Y axis grows downward, so invert the Y of the left stick.
+            //    2. The motion of the right stick to indicate rotation: If moving the stick rightwards, its +x indicates a Clockwise rotation.
+            //       In our convention the dRot velocity is positive in the CCW direction, so we invert the right stick.
+            dy = -dy;
+            dRot = -dRot;
+
+            {
+                static auto lastReportTime = millis();
+                auto now = millis();
+                if (now - lastReportTime > 3000)
+                {
+                    lastReportTime = now;
+                    Serial << "Xbox controller dx dy dRot " << dx << " " << dy << " " << dRot << endl;
+                    Serial << "Xbox controller joyLx joyLy joyRx joyRy " << 
+                        _xboxController.xboxNotif.joyLHori << " " <<
+                        _xboxController.xboxNotif.joyLVert << " " <<
+                        _xboxController.xboxNotif.joyRHori << " " <<
+                        _xboxController.xboxNotif.joyRVert << " " << endl;
+                    Serial << "Xbox controller battery " + String(_xboxController.battery) + "%" << endl;
+                }
+            }
             return true;
         }
         else
